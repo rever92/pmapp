@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { type Project } from "@/lib/types"
+import { type Project, type ProjectType } from "@/lib/types"
 import Link from "next/link"
 import { toast } from "sonner"
 
@@ -46,18 +46,32 @@ export default function ProjectsPage() {
   }, [supabase])
 
   const fetchProjects = async () => {
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false })
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false })
 
-    if (error) {
-      console.error('Error fetching projects:', error)
-      return
+      if (error) {
+        console.error('Error fetching projects:', error)
+        toast.error(`Error al cargar proyectos: ${error.message}`)
+        return
+      }
+
+      // Asegurarse de que los campos opcionales tengan valores adecuados
+      const formattedProjects = data.map(project => ({
+        ...project,
+        // Asegurarse de que is_industry sea un booleano
+        is_industry: project.is_industry === true
+      }))
+
+      setProjects(formattedProjects)
+    } catch (error: any) {
+      console.error('Error inesperado:', error)
+      toast.error(`Error inesperado: ${error.message}`)
+    } finally {
+      setLoading(false)
     }
-
-    setProjects(data)
-    setLoading(false)
   }
 
   const handleDeleteProject = async (projectId: string) => {
@@ -105,6 +119,9 @@ export default function ProjectsPage() {
           <TableRow>
             <TableHead>Nombre</TableHead>
             <TableHead>Estado</TableHead>
+            <TableHead>Tipo</TableHead>
+            <TableHead>Tamaño Empresa</TableHead>
+            <TableHead>Industria</TableHead>
             <TableHead>Progreso</TableHead>
             <TableHead>Fecha Inicio</TableHead>
             <TableHead>Fecha Fin</TableHead>
@@ -125,8 +142,29 @@ export default function ProjectsPage() {
                 </Badge>
               </TableCell>
               <TableCell>
+                {project.project_type ? (
+                  <Badge variant="outline">{project.project_type}</Badge>
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                )}
+              </TableCell>
+              <TableCell>
+                {project.company_size ? (
+                  <span className="text-sm">{project.company_size}</span>
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                )}
+              </TableCell>
+              <TableCell>
+                {project.is_industry === true ? (
+                  <Badge variant="secondary">Sí</Badge>
+                ) : (
+                  <span className="text-muted-foreground">No</span>
+                )}
+              </TableCell>
+              <TableCell>
                 <div className="w-[100px]">
-                  <Progress value={project.progress} className="h-2" />
+                  <Progress value={project.progress || 0} className="h-2" />
                 </div>
               </TableCell>
               <TableCell>{new Date(project.start_date).toLocaleDateString()}</TableCell>

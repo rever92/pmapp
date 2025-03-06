@@ -14,7 +14,16 @@ El cronograma y la lista de tareas se deberían mostrar con esta exacta funciona
 
 Vamos a asignar roles a los usuarios, que además se tendrán que mapear con la tabla de consultores. Los roles que creo que vamos a tener son: Admin, Project Manager y Consultor
 
+En la vista general de carga de trabajo, siempre se empezará a ver desde la semana actual, y siempre se mostrará como fecha de inicio de cada semana los lunes, no el día actual, así como la carga que se verá será la se cada semana completa de lunes a domingo. 
+
+Añadir al dashboard un nuevo elemento que sea una tabla que muestre el nº de proyectos activos en los que está un consultor actualmente, el número de horas asignadas que tiene pendiente de ejecutar
+
+
 # TO DO _____________________________________________________________________
+
+
+
+Añadir una vista de diagrama de todos los proyectos (una línea por proyecto que abarque desde su fecha de inicio hasta la de fin) y que se pueda filtrar por campos como el tipo de proyecto o el consultor que participa)
 
 En la pantalla de listado de proyectos, por defecto se deberían ocultar los proyectos completados, mostrando un toggle activado que sea "Ocultar finalizados" y que permita mostrarlos si se desmarca.
 

@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { List, GanttChart, Pencil, Trash2, Clock } from "lucide-react"
-import { type Task, type TaskTemplate, type TaskStatus, type TaskTimeSummary } from "@/lib/types"
+import { type Task, type TaskTemplate, type TaskStatus, type TaskTimeSummary, type Consultant } from "@/lib/types"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { TimeEntryForm } from './TimeEntryForm'
@@ -23,9 +23,9 @@ const taskStatusOptions = [
 
 const taskStatusColors: Record<TaskStatus, "default" | "secondary" | "destructive" | "outline"> = {
   pending: "default",
-  in_progress: "secondary",
+  "in-progress": "secondary",
   completed: "outline",
-  on_hold: "destructive"
+  blocked: "destructive"
 }
 
 interface TasksTimelineProps {
@@ -47,6 +47,53 @@ export function TasksTimeline({
   const [editingTask, setEditingTask] = useState<Task | TaskTemplate | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [taskSummaries, setTaskSummaries] = useState<Record<string, TaskTimeSummary>>({})
+  const [timelineWidth, setTimelineWidth] = useState(0)
+  const [consultants, setConsultants] = useState<any[]>([])
+
+  // Cargar consultores cuando se abre el diálogo de edición
+  useEffect(() => {
+    if (isEditDialogOpen && !isTemplate) {
+      loadConsultants()
+    }
+  }, [isEditDialogOpen, isTemplate])
+
+  // Función para cargar consultores
+  const loadConsultants = async () => {
+    try {
+      console.log("Cargando consultores...")
+      const { data, error } = await supabase
+        .from("consultants")
+        .select("*")
+        .eq("status", "active")
+        .order("last_name")
+      
+      if (error) throw error
+      
+      console.log("Datos de consultores recibidos:", data)
+      
+      // Transformar los datos para que tengan el formato esperado por el componente
+      const formattedConsultants = data?.map(consultant => {
+        console.log("Procesando consultor:", consultant)
+        return {
+          id: consultant.id,
+          name: `${consultant.last_name || ''}, ${consultant.first_name || ''}`,
+          email: consultant.email,
+          specialization: consultant.specialization,
+          weekly_hours: consultant.weekly_hours,
+          user_id: consultant.user_id,
+          role: consultant.role || 'consultant',
+          send_invitation: false,
+          created_at: consultant.created_at,
+          updated_at: consultant.updated_at
+        }
+      }) || []
+      
+      setConsultants(formattedConsultants)
+      console.log("Consultores cargados en TasksTimeline:", formattedConsultants.length, formattedConsultants)
+    } catch (error) {
+      console.error("Error al cargar consultores:", error)
+    }
+  }
 
   // Función para cargar los resúmenes de tiempo de las tareas
   const loadTaskSummaries = async () => {
@@ -129,6 +176,16 @@ export function TasksTimeline({
   }
 
   const startEditing = (task: Task | TaskTemplate) => {
+    console.log("Iniciando edición de tarea:", task)
+    if (!isTemplate) {
+      console.log("Consultant ID de la tarea:", (task as Task).consultant_id)
+      console.log("Consultores disponibles:", consultants)
+      
+      // Cargar consultores si no están cargados
+      if (consultants.length === 0) {
+        loadConsultants()
+      }
+    }
     setEditingTask(task)
     setIsEditDialogOpen(true)
   }
@@ -273,7 +330,7 @@ export function TasksTimeline({
                           <div key={i} className="flex-shrink-0 w-8 text-center text-sm text-muted-foreground">
                             {isTemplate ? i : (() => {
                               const date = new Date(projectStartDate!)
-                              date.setDate(date.getDate() + i)
+                              date.getDate() + i
                               return date.getDate()
                             })()}
                           </div>
@@ -518,6 +575,48 @@ export function TasksTimeline({
                     prev ? { ...prev, estimated_hours: parseInt(e.target.value) } : null
                   )}
                 />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Consultor Asignado</Label>
+              <Select
+                value={(editingTask as Task)?.consultant_id || "unassigned"}
+                onValueChange={(value: string) => {
+                  console.log("Seleccionando consultor:", value);
+                  setEditingTask(prev => 
+                    prev ? { ...prev, consultant_id: value } as Task : null
+                  );
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar consultor">
+                    {(editingTask as Task)?.consultant_id && consultants.length > 0 
+                      ? consultants.find(c => c.id === (editingTask as Task)?.consultant_id)?.name || "Consultor no encontrado" 
+                      : "Seleccionar consultor"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="unassigned">Sin asignar</SelectItem>
+                  {consultants.length > 0 ? (
+                    consultants.map((consultant: any) => (
+                      <SelectItem key={consultant.id} value={consultant.id}>
+                        {consultant.name || `ID: ${consultant.id}`}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="no_consultants" disabled>
+                      No hay consultores disponibles
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              <div className="text-xs text-muted-foreground">
+                Consultor ID actual: {(editingTask as Task)?.consultant_id || "No asignado"}
+                {(editingTask as Task)?.consultant_id && consultants.length > 0 && (
+                  <div>
+                    Nombre: {consultants.find(c => c.id === (editingTask as Task)?.consultant_id)?.name || "No encontrado"}
+                  </div>
+                )}
               </div>
             </div>
           </div>

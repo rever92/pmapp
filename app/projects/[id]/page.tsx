@@ -18,8 +18,9 @@ import {
 } from "@/components/ui/select"
 import { Plus, Pencil, Trash2, X, Check } from "lucide-react"
 import { toast } from "sonner"
-import { type Project, type Task, type Consultant, type ProjectTemplate, type ProjectStatus, type TaskStatus } from "@/lib/types"
+import { type Project, type Task, type Consultant, type ProjectTemplate, type ProjectStatus, type TaskStatus, type ProjectType, type CompanySizeType } from "@/lib/types"
 import { TasksTimeline } from "@/components/tasks/TasksTimeline"
+import { Checkbox } from "@/components/ui/checkbox"
 
 const taskStatusColors = {
   'pending': 'secondary',
@@ -40,14 +41,30 @@ const PROJECT_STATUS: Record<string, ProjectStatus> = {
   PLANNING: 'planning',
   ACTIVE: 'active',
   COMPLETED: 'completed',
-  ON_HOLD: 'on_hold'
+  ON_HOLD: 'on-hold'
 }
 
 const TASK_STATUS: Record<string, TaskStatus> = {
   PENDING: 'pending',
-  IN_PROGRESS: 'in_progress',
+  IN_PROGRESS: 'in-progress',
   COMPLETED: 'completed',
-  ON_HOLD: 'on_hold'
+  BLOCKED: 'blocked'
+}
+
+// Constantes para los tipos de proyecto
+const PROJECT_TYPES: Record<string, ProjectType> = {
+  PTD: 'PTD',
+  KC360: 'KC360',
+  EOI: 'EOI',
+  IA: 'IA',
+  KCIA: 'KCIA'
+}
+
+// Constantes para los tamaños de empresa
+const COMPANY_SIZES: Record<string, CompanySizeType> = {
+  SMALL: 'Pequeña (1-30empl)',
+  MEDIUM: 'Mediana (30-70empl)',
+  LARGE: 'Grande (Más de 70)'
 }
 
 interface TempTask {
@@ -71,7 +88,7 @@ const taskStatusOptions = [
   { value: TASK_STATUS.PENDING, label: 'Pendiente' },
   { value: TASK_STATUS.IN_PROGRESS, label: 'En Progreso' },
   { value: TASK_STATUS.COMPLETED, label: 'Completada' },
-  { value: TASK_STATUS.ON_HOLD, label: 'En Pausa' }
+  { value: TASK_STATUS.BLOCKED, label: 'Bloqueada' }
 ]
 
 export default function ProjectPage({ params }: { params: { id: string } }) {
@@ -89,7 +106,10 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
     end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     status: PROJECT_STATUS.PLANNING,
     created_at: "",
-    updated_at: ""
+    updated_at: "",
+    project_type: null,
+    company_size: null,
+    is_industry: false
   })
   const [tasks, setTasks] = useState<Task[]>([])
   const [newTask, setNewTask] = useState<Partial<Task>>({
@@ -119,7 +139,25 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
 
         if (consultantsError) throw consultantsError
 
-        setConsultants(consultantsData)
+        // Formatear los consultores para mostrar nombre completo
+        const formattedConsultants = consultantsData?.map(consultant => {
+          console.log("Procesando consultor en ProjectPage:", consultant);
+          return {
+            id: consultant.id,
+            name: `${consultant.last_name || ''}, ${consultant.first_name || ''}`,
+            email: consultant.email,
+            specialization: consultant.specialization,
+            weekly_hours: consultant.weekly_hours,
+            user_id: consultant.user_id,
+            role: consultant.role || 'consultant',
+            send_invitation: false,
+            created_at: consultant.created_at,
+            updated_at: consultant.updated_at
+          };
+        }) || []
+
+        setConsultants(formattedConsultants)
+        console.log("Consultores cargados en ProjectPage:", formattedConsultants.length, formattedConsultants)
 
         // Fetch templates if creating new project
         if (params.id === "new") {
@@ -142,7 +180,18 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
 
           if (projectError) throw projectError
 
-          setProject(projectData)
+          // Asegurarse de que los campos opcionales tengan valores adecuados
+          const formattedProject = {
+            ...projectData,
+            // Asegurarse de que project_type sea un valor válido o null
+            project_type: projectData.project_type || null,
+            // Asegurarse de que company_size sea un valor válido o null
+            company_size: projectData.company_size || null,
+            // Asegurarse de que is_industry sea un booleano
+            is_industry: projectData.is_industry === true
+          }
+
+          setProject(formattedProject)
 
           // Fetch tasks
           const { data: tasksData, error: tasksError } = await supabase
@@ -156,6 +205,7 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
           setTasks(tasksData)
         }
       } catch (error: any) {
+        console.error("Error detallado:", error)
         toast.error(`Error al cargar datos: ${error.message}`)
       } finally {
         setLoading(false)
@@ -180,13 +230,28 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
     setLoading(true)
 
     try {
-      const projectData = {
+      // Preparar los datos del proyecto, manejando correctamente los valores nulos
+      const projectData: any = {
         name: project.name,
         description: project.description || null,
         start_date: project.start_date,
         end_date: project.end_date,
         status: project.status
       }
+
+      // Añadir los campos opcionales solo si tienen un valor
+      if (project.project_type) {
+        projectData.project_type = project.project_type;
+      }
+      
+      if (project.company_size) {
+        projectData.company_size = project.company_size;
+      }
+      
+      // Asegurarse de que is_industry sea un booleano
+      projectData.is_industry = project.is_industry === true;
+
+      console.log("Datos a enviar:", projectData)
 
       if (params.id === "new") {
         // Crear el proyecto
@@ -196,7 +261,10 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
           .select()
           .single()
 
-        if (projectError) throw projectError
+        if (projectError) {
+          console.error("Error al crear proyecto:", projectError)
+          throw projectError
+        }
 
         // Si hay tareas de la plantilla, crearlas
         if (tempTasks.length > 0) {
@@ -215,23 +283,31 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
             .from("tasks")
             .insert(tasksToCreate)
 
-          if (tasksError) throw tasksError
+          if (tasksError) {
+            console.error("Error al crear tareas:", tasksError)
+            throw tasksError
+          }
         }
 
         toast.success("Proyecto creado exitosamente")
         router.push(`/projects/${newProject.id}`)
       } else {
+        // Actualizar el proyecto existente
         const { error } = await supabase
           .from("projects")
           .update(projectData)
           .eq("id", params.id)
 
-        if (error) throw error
+        if (error) {
+          console.error("Error al actualizar proyecto:", error)
+          throw error
+        }
 
         toast.success("Proyecto actualizado exitosamente")
         router.push("/projects")
       }
     } catch (error: any) {
+      console.error("Error detallado:", error)
       toast.error(`Error: ${error.message}`)
     } finally {
       setLoading(false)
@@ -239,40 +315,61 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
   }
 
   const handleAddTask = async () => {
-    if (!newTask.name) {
-      toast.error("Por favor ingrese el nombre de la tarea")
-      return
-    }
-
     try {
-      const taskData = {
-        ...newTask,
-        project_id: params.id,
-        description: newTask.description || null,
-        consultant_id: newTask.consultant_id || null
+      if (!newTask.name || !newTask.start_date || !newTask.end_date || !newTask.consultant_id) {
+        toast.error("Por favor complete todos los campos requeridos")
+        return
       }
 
-      const { data, error } = await supabase
-        .from("tasks")
-        .insert([taskData])
-        .select()
-        .single()
+      if (params.id === "new") {
+        // Si estamos creando un nuevo proyecto, agregamos la tarea a la lista temporal
+        const tempTask: TempTask = {
+          name: newTask.name,
+          description: newTask.description || null,
+          estimated_hours: newTask.estimated_hours || 8,
+          start_date: newTask.start_date,
+          end_date: newTask.end_date,
+          status: newTask.status || 'pending',
+          consultant_id: newTask.consultant_id
+        }
+        setTempTasks([...tempTasks, tempTask])
+        toast.success("Tarea agregada al proyecto")
+      } else {
+        // Si estamos editando un proyecto existente, agregamos la tarea a la base de datos
+        const { data, error } = await supabase
+          .from("tasks")
+          .insert({
+            project_id: params.id,
+            name: newTask.name,
+            description: newTask.description,
+            estimated_hours: newTask.estimated_hours || 8,
+            start_date: newTask.start_date,
+            end_date: newTask.end_date,
+            status: newTask.status || 'pending',
+            consultant_id: newTask.consultant_id
+          })
+          .select()
 
-      if (error) throw error
+        if (error) throw error
 
-      setTasks([...tasks, data])
+        if (data && data[0]) {
+          setTasks([...tasks, data[0]])
+          toast.success("Tarea agregada exitosamente")
+        }
+      }
+
+      // Limpiar el formulario
       setNewTask({
         name: "",
         description: "",
         estimated_hours: 8,
         start_date: project.start_date,
         end_date: project.end_date,
-        status: TASK_STATUS.PENDING,
+        status: 'pending',
         consultant_id: null
       })
-      toast.success("Tarea agregada exitosamente")
     } catch (error: any) {
-      toast.error(`Error: ${error.message}`)
+      toast.error(`Error al agregar tarea: ${error.message}`)
     }
   }
 
@@ -517,6 +614,76 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="project_type">Tipo de Proyecto</Label>
+              <Select
+                value={project.project_type || "null"}
+                onValueChange={(value) => {
+                  // Si el valor es "null" (como string), establecer como null
+                  if (value === "null") {
+                    const updatedProject = { ...project };
+                    updatedProject.project_type = null;
+                    setProject(updatedProject);
+                  } else {
+                    setProject({ ...project, project_type: value as ProjectType });
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar tipo de proyecto" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="null">Ninguno</SelectItem>
+                  {Object.entries(PROJECT_TYPES).map(([key, value]) => (
+                    <SelectItem key={key} value={value}>
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="company_size">Tamaño de Empresa</Label>
+              <Select
+                value={project.company_size || "null"}
+                onValueChange={(value) => {
+                  // Si el valor es "null" (como string), establecer como null
+                  if (value === "null") {
+                    const updatedProject = { ...project };
+                    updatedProject.company_size = null;
+                    setProject(updatedProject);
+                  } else {
+                    setProject({ ...project, company_size: value as CompanySizeType });
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar tamaño de empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="null">Ninguno</SelectItem>
+                  {Object.entries(COMPANY_SIZES).map(([key, value]) => (
+                    <SelectItem key={key} value={value}>
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="is_industry" 
+                checked={project.is_industry === true}
+                onCheckedChange={(checked) => {
+                  // Asegurarse de que el valor sea siempre un booleano
+                  setProject({ ...project, is_industry: checked === true })
+                }}
+              />
+              <Label htmlFor="is_industry">Proyecto de Industria</Label>
+            </div>
           </CardContent>
         </Card>
 
@@ -593,11 +760,32 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Consultor Asignado</Label>
-                    <Input
-                      placeholder="ID del consultor"
-                      value={newTask.consultant_id || ""}
-                      onChange={(e) => setNewTask({ ...newTask, consultant_id: e.target.value })}
-                    />
+                    <Select
+                      value={newTask.consultant_id || "unassigned"}
+                      onValueChange={(value) => setNewTask({ ...newTask, consultant_id: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar consultor">
+                          {newTask.consultant_id && consultants.length > 0 
+                            ? consultants.find(c => c.id === newTask.consultant_id)?.name || "Consultor no encontrado" 
+                            : "Seleccionar consultor"}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Sin asignar</SelectItem>
+                        {consultants.length > 0 ? (
+                          consultants.map((consultant: Consultant) => (
+                            <SelectItem key={consultant.id} value={consultant.id}>
+                              {consultant.name || `ID: ${consultant.id}`}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="no_consultants" disabled>
+                            No hay consultores disponibles
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label>Horas Estimadas</Label>
@@ -672,18 +860,29 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
                       <div className="space-y-2">
                         <Label>Consultor</Label>
                         <Select
-                          value={editingTempTask?.consultant_id || ""}
+                          value={editingTempTask?.consultant_id || "unassigned"}
                           onValueChange={(value) => setEditingTempTask(prev => prev ? { ...prev, consultant_id: value } : null)}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Seleccionar consultor" />
+                            <SelectValue placeholder="Seleccionar consultor">
+                              {editingTempTask?.consultant_id && consultants.length > 0 
+                                ? consultants.find(c => c.id === editingTempTask.consultant_id)?.name || "Consultor no encontrado" 
+                                : "Seleccionar consultor"}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
-                            {consultants.map((consultant) => (
-                              <SelectItem key={consultant.id} value={consultant.id}>
-                                {consultant.name}
+                            <SelectItem value="unassigned">Sin asignar</SelectItem>
+                            {consultants.length > 0 ? (
+                              consultants.map((consultant: Consultant) => (
+                                <SelectItem key={consultant.id} value={consultant.id}>
+                                  {consultant.name || `ID: ${consultant.id}`}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <SelectItem value="no_consultants" disabled>
+                                No hay consultores disponibles
                               </SelectItem>
-                            ))}
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
@@ -744,7 +943,7 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
                         <span className="font-medium">Consultor:</span>
                         <span className={!task.consultant_id ? "text-red-500" : ""}>
                           {task.consultant_id 
-                            ? `${consultants.find(c => c.id === task.consultant_id)?.name}`
+                            ? `${consultants.find(c => c.id === task.consultant_id)?.name || 'Consultor no encontrado'}`
                             : 'No asignado'}
                         </span>
                       </div>

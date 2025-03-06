@@ -2,6 +2,8 @@ import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
 import { cookies } from "next/headers"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { WorkloadTable } from "@/components/workload-table"
+import { ConsultantWorkloadSummary } from "@/components/consultant-workload-summary"
+import { ProjectsTimeline } from "@/components/projects-timeline"
 
 export const dynamic = 'force-dynamic'
 
@@ -71,6 +73,8 @@ export default async function Home() {
           <WorkloadTable />
         </CardContent>
       </Card>
+      <ConsultantWorkloadSummary />
+      <ProjectsTimeline />
     </div>
   )
 }

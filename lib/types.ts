@@ -9,8 +9,12 @@ interface BaseTask {
 }
 
 // Estados
-export type ProjectStatus = 'planning' | 'active' | 'completed' | 'on_hold'
-export type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'on_hold'
+export type ProjectStatus = 'planning' | 'active' | 'completed' | 'on-hold'
+export type TaskStatus = 'pending' | 'in-progress' | 'completed' | 'blocked'
+
+// Tipos de proyecto
+export type ProjectType = 'PTD' | 'KC360' | 'EOI' | 'IA' | 'KCIA'
+export type CompanySizeType = 'Pequeña (1-30empl)' | 'Mediana (30-70empl)' | 'Grande (Más de 70)'
 
 // Roles de usuario
 export type UserRole = 'admin' | 'project_manager' | 'consultant'
@@ -50,8 +54,12 @@ export interface Project {
   start_date: string
   end_date: string
   status: ProjectStatus
+  progress?: number
   created_at: string
   updated_at: string
+  project_type: ProjectType | null
+  company_size: CompanySizeType | null
+  is_industry: boolean | null
 }
 
 // Consultor

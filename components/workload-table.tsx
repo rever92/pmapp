@@ -18,17 +18,31 @@ type WeeklyWorkload = {
   total_hours: number
 }
 
+// Extendemos el tipo Consultant para incluir los campos que vienen de la base de datos
+type ConsultantWithNames = Consultant & {
+  first_name: string
+  last_name: string
+}
+
 export function WorkloadTable() {
   const supabase = createClientComponentClient()
-  const [consultants, setConsultants] = useState<Consultant[]>([])
+  const [consultants, setConsultants] = useState<ConsultantWithNames[]>([])
   const [workloads, setWorkloads] = useState<WeeklyWorkload[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Obtener las próximas 4 semanas
+  // Obtener el lunes de la semana actual y las próximas 3 semanas
   const weeks = Array.from({ length: 4 }, (_, i) => {
     const date = new Date()
-    date.setDate(date.getDate() + (i * 7))
-    return date.toISOString().split('T')[0]
+    const day = date.getDay() // 0 es domingo, 1 es lunes, etc.
+    const diff = date.getDate() - day + (day === 0 ? -6 : 1) // Ajustar al lunes
+    
+    // Crear fecha para el lunes de la semana actual
+    const monday = new Date(date.setDate(diff))
+    
+    // Añadir i semanas
+    monday.setDate(monday.getDate() + (i * 7))
+    
+    return monday.toISOString().split('T')[0]
   })
 
   useEffect(() => {
@@ -39,7 +53,7 @@ export function WorkloadTable() {
           .from('consultants')
           .select('*')
           .eq('status', 'active')
-          .order('last_name')
+          .order('last_name', { ascending: true })
 
         if (consultantsError) throw consultantsError
 
@@ -52,17 +66,17 @@ export function WorkloadTable() {
 
         if (workloadError) throw workloadError
 
-        setConsultants(consultantsData)
-        setWorkloads(workloadData)
+        setConsultants(consultantsData || [])
+        setWorkloads(workloadData || [])
       } catch (error) {
-        console.error('Error fetching data:', error)
+        console.error('Error al obtener datos:', error)
       } finally {
         setLoading(false)
       }
     }
 
     fetchData()
-  }, [supabase])
+  }, [supabase, weeks])
 
   if (loading) return <div>Cargando...</div>
 
@@ -82,7 +96,10 @@ export function WorkloadTable() {
 
   function formatWeekDate(date: string): string {
     const d = new Date(date)
-    return `${d.getDate()}/${d.getMonth() + 1}`
+    const endOfWeek = new Date(date)
+    endOfWeek.setDate(d.getDate() + 6) // Domingo (6 días después del lunes)
+    
+    return `${d.getDate()}/${d.getMonth() + 1} - ${endOfWeek.getDate()}/${endOfWeek.getMonth() + 1}`
   }
 
   return (
@@ -99,24 +116,32 @@ export function WorkloadTable() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {consultants.map(consultant => (
-            <TableRow key={consultant.id}>
-              <TableCell className="font-medium">
-                {consultant.last_name}, {consultant.first_name}
+          {consultants.length > 0 ? (
+            consultants.map(consultant => (
+              <TableRow key={consultant.id}>
+                <TableCell className="font-medium">
+                  {consultant.last_name}, {consultant.first_name}
+                </TableCell>
+                {weeks.map(week => {
+                  const hours = getWorkloadForWeek(consultant.id, week)
+                  return (
+                    <TableCell 
+                      key={week} 
+                      className={`text-center ${getWorkloadColor(hours, consultant.weekly_hours)}`}
+                    >
+                      {hours}/{consultant.weekly_hours}
+                    </TableCell>
+                  )
+                })}
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={weeks.length + 1} className="text-center py-4">
+                No se encontraron consultores activos
               </TableCell>
-              {weeks.map(week => {
-                const hours = getWorkloadForWeek(consultant.id, week)
-                return (
-                  <TableCell 
-                    key={week} 
-                    className={`text-center ${getWorkloadColor(hours, consultant.weekly_hours)}`}
-                  >
-                    {hours}/{consultant.weekly_hours}
-                  </TableCell>
-                )
-              })}
             </TableRow>
-          ))}
+          )}
         </TableBody>
       </Table>
     </div>
